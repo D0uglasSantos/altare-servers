@@ -155,14 +155,15 @@ export default function Servidores() {
           {editingId ? "Atualizar" : "Adicionar"} Servidor
         </Button>
       </form>
-      <div className="flex items-center justify-between gap-4">
-        {/* Filtro por nome */}
-        <Input
-          placeholder="Pesquisar por nome"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-
+      <div className="space-y-2 md:flex md:items-center md:justify-between gap-4">
+        <div className="w-full">
+          {/* Filtro por nome */}
+          <Input
+            placeholder="Pesquisar por nome"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
         {/* Filtro por função */}
         <Select onValueChange={(value) => setFilterFuncao(value)}>
           <SelectTrigger>

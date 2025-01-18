@@ -22,10 +22,22 @@ interface Servidor {
   idade: number;
 }
 
-interface Escala {
-  acolitos: Servidor[];
-  cerimoniarios: Servidor[];
+interface EscalaMissa {
+  [funcao: string]: Servidor;
 }
+
+interface Escala {
+  [missa: string]: EscalaMissa;
+}
+
+const missas = [
+  { id: "sabado18h", label: "Sábado 18h" },
+  { id: "domingo07h", label: "Domingo 07h" },
+  { id: "domingo0830h", label: "Domingo 08:30h" },
+  { id: "domingo11h", label: "Domingo 11h" },
+  { id: "domingo18h", label: "Domingo 18h" },
+  { id: "domingo20h", label: "Domingo 20h" },
+];
 
 export default function GerarEscala() {
   const [tipoMissa, setTipoMissa] = useState<string>("");
@@ -40,9 +52,7 @@ export default function GerarEscala() {
     domingo20h: false,
   });
   const [servidores, setServidores] = useState<Servidor[]>([]);
-  const [escalaGerada, setEscalaGerada] = useState<{
-    [key: string]: Escala;
-  } | null>(null);
+  const [escalaGerada, setEscalaGerada] = useState<Escala | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bispoPresente, setBispoPresente] = useState<boolean>(false);
@@ -81,153 +91,120 @@ export default function GerarEscala() {
       return;
     }
 
-    const escala: { [key: string]: Escala } = {};
+    const escala: Escala = {};
     const servidoresDisponiveis = [...servidores];
 
-    // Definindo os horários das missas
-    const horariosMissas = [
-      "sabado18h",
-      "domingo07h",
-      "domingo0830h",
-      "domingo11h",
-      "domingo18h",
-      "domingo20h",
-    ];
+    missas.forEach(({ id: missa }) => {
+      const isSolene = tipoMissa !== "dominical" && missasSolenes[missa];
+      const isSoleneMaior = tipoMissa === "soleneMaior" && missasSolenes[missa];
 
-    // Se o tipo de missa for dominical
-    if (tipoMissa === "dominical") {
-      horariosMissas.forEach((missa) => {
-        escala[missa] = {
-          acolitos: [],
-          cerimoniarios: [],
-        };
+      escala[missa] = {};
 
-        // Selecionar Acólitos para Missas Dominicais
-        for (let i = 0; i < 1; i++) {
-          // 1 Acólito
-          const acolito = servidoresDisponiveis.find((s) =>
-            s.funcao.includes("Acólito")
-          );
-          if (acolito) {
-            escala[missa].acolitos.push(acolito);
-            servidoresDisponiveis.splice(
-              servidoresDisponiveis.indexOf(acolito),
-              1
-            );
-          }
-        }
-
-        // Selecionar Cerimoniários para Missas Dominicais
-        for (let i = 0; i < 3; i++) {
-          // 3 Cerimoniários
-          const cerimoniario = servidoresDisponiveis.find((s) =>
-            s.funcao.includes("Cerimoniário")
-          );
-          if (cerimoniario) {
-            escala[missa].cerimoniarios.push(cerimoniario);
-            servidoresDisponiveis.splice(
-              servidoresDisponiveis.indexOf(cerimoniario),
-              1
-            );
-          }
-        }
-      });
-    } else if (tipoMissa === "solene" || tipoMissa === "soleneMaior") {
-      horariosMissas.forEach((missa) => {
-        if (missasSolenes[missa]) {
-          escala[missa] = {
-            acolitos: [],
-            cerimoniarios: [],
-          };
-
-          const numAcolitos = tipoMissa === "solene" ? 2 : 4; // Acólitos para Solene ou Solene Maior
-          const numCerimoniarios =
-            tipoMissa === "solene" ? 4 : bispoPresente ? 9 : 7; // Cerimoniários
-
-          // Selecionar Acólitos
-          for (let i = 0; i < numAcolitos; i++) {
-            const acolito = servidoresDisponiveis.find((s) =>
-              s.funcao.includes("Acólito")
-            );
-            if (acolito) {
-              escala[missa].acolitos.push(acolito);
-              servidoresDisponiveis.splice(
-                servidoresDisponiveis.indexOf(acolito),
-                1
-              );
-            }
-          }
-
-          // Selecionar Cerimoniários
-          for (let i = 0; i < numCerimoniarios; i++) {
-            const cerimoniario = servidoresDisponiveis.find((s) =>
-              s.funcao.includes("Cerimoniário")
-            );
-            if (cerimoniario) {
-              escala[missa].cerimoniarios.push(cerimoniario);
-              servidoresDisponiveis.splice(
-                servidoresDisponiveis.indexOf(cerimoniario),
-                1
-              );
-            }
-          }
-        }
-      });
-
-      // Para as missas que não foram selecionadas como solenes, gerar como dominicais
-      horariosMissas.forEach((missa) => {
-        if (!missasSolenes[missa]) {
-          escala[missa] = {
-            acolitos: [],
-            cerimoniarios: [],
-          };
-
-          // Selecionar Acólitos para Missas Dominicais
-          for (let i = 0; i < 1; i++) {
-            // 1 Acólito
-            const acolito = servidoresDisponiveis.find((s) =>
-              s.funcao.includes("Acólito")
-            );
-            if (acolito) {
-              escala[missa].acolitos.push(acolito);
-              servidoresDisponiveis.splice(
-                servidoresDisponiveis.indexOf(acolito),
-                1
-              );
-            }
-          }
-
-          // Selecionar Cerimoniários para Missas Dominicais
-          for (let i = 0; i < 3; i++) {
-            // 3 Cerimoniários
-            const cerimoniario = servidoresDisponiveis.find((s) =>
-              s.funcao.includes("Cerimoniário")
-            );
-            if (cerimoniario) {
-              escala[missa].cerimoniarios.push(cerimoniario);
-              servidoresDisponiveis.splice(
-                servidoresDisponiveis.indexOf(cerimoniario),
-                1
-              );
-            }
-          }
-        }
-      });
-    }
-
-    // Verifica se todas as missas têm pelo menos um servidor
-    for (const missa in escala) {
-      if (
-        escala[missa].acolitos.length === 0 ||
-        escala[missa].cerimoniarios.length === 0
-      ) {
-        alert(`Não há servidores suficientes para a missa ${missa}.`);
-        return;
+      if (isSoleneMaior) {
+        alocarServidoresSoleneMaior(
+          escala[missa],
+          servidoresDisponiveis,
+          bispoPresente
+        );
+      } else if (isSolene) {
+        alocarServidoresSolene(escala[missa], servidoresDisponiveis);
+      } else {
+        alocarServidoresDominical(escala[missa], servidoresDisponiveis);
       }
-    }
+    });
 
     setEscalaGerada(escala);
     setError(null);
+  };
+
+  const alocarServidoresDominical = (
+    escalaMissa: EscalaMissa,
+    servidoresDisponiveis: Servidor[]
+  ) => {
+    const funcoes = [
+      "Librífero/Cruciferário",
+      "Cerimoniário Geral",
+      "Cerimoniário Palavra",
+      "Cerimoniário Credência",
+    ];
+    alocarServidores(escalaMissa, servidoresDisponiveis, funcoes);
+  };
+
+  const alocarServidoresSolene = (
+    escalaMissa: EscalaMissa,
+    servidoresDisponiveis: Servidor[]
+  ) => {
+    const funcoes = [
+      "Librífero/Cruciferário",
+      "Naveteiro",
+      "Cerimoniário Geral",
+      "Cerimoniário Palavra",
+      "Cerimoniário Credência",
+      "Turiferário",
+    ];
+    alocarServidores(escalaMissa, servidoresDisponiveis, funcoes);
+  };
+
+  const alocarServidoresSoleneMaior = (
+    escalaMissa: EscalaMissa,
+    servidoresDisponiveis: Servidor[],
+    bispoPresente: boolean
+  ) => {
+    const funcoes = [
+      "Librífero/Cruciferário",
+      "Naveteiro",
+      "Ceroferário 1",
+      "Ceroferário 2",
+      "Cerimoniário Geral 1",
+      "Cerimoniário Geral 2",
+      "Cerimoniário Palavra 1",
+      "Cerimoniário Palavra 2",
+      "Cerimoniário Credência 1",
+      "Cerimoniário Credência 2",
+      "Turiferário",
+    ];
+    if (bispoPresente) {
+      funcoes.push("Báculífero", "Mitrífero");
+    }
+    alocarServidores(escalaMissa, servidoresDisponiveis, funcoes);
+  };
+
+  const formatarNome = (nome: string) => {
+    const [primeiroNome, ...sobrenomes] = nome.split(" ");
+    const ultimoSobrenome = sobrenomes[sobrenomes.length - 1];
+    return `${primeiroNome} ${ultimoSobrenome.charAt(0)}.`;
+  };
+
+  const alocarServidores = (
+    escalaMissa: EscalaMissa,
+    servidoresDisponiveis: Servidor[],
+    funcoes: string[]
+  ) => {
+    funcoes.forEach((funcao) => {
+      const servidor = servidoresDisponiveis.find(
+        (s) =>
+          (funcao.includes("Cerimoniário") &&
+            s.funcao.includes("Cerimoniário")) ||
+          (!funcao.includes("Cerimoniário") && s.funcao.includes("Acólito"))
+      );
+      if (servidor) {
+        escalaMissa[funcao] = {
+          ...servidor,
+          nome: formatarNome(servidor.nome),
+        };
+        servidoresDisponiveis.splice(
+          servidoresDisponiveis.indexOf(servidor),
+          1
+        );
+      } else {
+        escalaMissa[funcao] = {
+          id: "não-alocado",
+          nome: "Não alocado",
+          funcao: "Não alocado",
+          idade: 0,
+        };
+      }
+    });
   };
 
   const resetarEscala = () => {
@@ -245,15 +222,6 @@ export default function GerarEscala() {
     setError(null);
   };
 
-  const missas = [
-    { id: "sabado18h", label: "Sábado 18h" },
-    { id: "domingo07h", label: "Domingo 07h" },
-    { id: "domingo0830h", label: "Domingo 08:30h" },
-    { id: "domingo11h", label: "Domingo 11h" },
-    { id: "domingo18h", label: "Domingo 18h" },
-    { id: "domingo20h", label: "Domingo 20h" },
-  ];
-
   if (loading) {
     return <div>Carregando servidores...</div>;
   }
@@ -267,13 +235,12 @@ export default function GerarEscala() {
 
       <Card className="p-6">
         <div>
+          <Label htmlFor="tipoMissa">Tipo de Missa:</Label>
           <Select
-            id="tipoMissa"
             value={tipoMissa}
             onValueChange={(value) => setTipoMissa(value)}
-            className="w-full mt-1"
           >
-            <SelectTrigger className="w-max p-1">
+            <SelectTrigger className="w-full mt-1">
               <SelectValue placeholder="Selecione o tipo de missa" />
             </SelectTrigger>
             <SelectContent>
@@ -299,7 +266,7 @@ export default function GerarEscala() {
                     onCheckedChange={(checked) =>
                       setMissasSolenes({
                         ...missasSolenes,
-                        [missa.id]: checked,
+                        [missa.id]: checked as boolean,
                       })
                     }
                   />
@@ -315,13 +282,15 @@ export default function GerarEscala() {
               <Checkbox
                 id="bispoPresente"
                 checked={bispoPresente}
-                onCheckedChange={(checked) => setBispoPresente(checked)}
+                onCheckedChange={(checked) =>
+                  setBispoPresente(checked as boolean)
+                }
               />
               <Label htmlFor="bispoPresente">Sim</Label>
             </div>
           )}
         </div>
-        <div className="w-max h-max p-1 flex items-center space-x-2 mt-4">
+        <div className="flex items-center space-x-2 mt-4">
           <Button
             onClick={handleGerarEscala}
             disabled={
@@ -344,14 +313,11 @@ export default function GerarEscala() {
               <h3 className="text-lg font-semibold">
                 {missas.find((m) => m.id === missa)?.label}
               </h3>
-              <p>
-                Acólitos:{" "}
-                {dados.acolitos.map((a) => a.nome).join(", ") || "Nenhum"}
-              </p>
-              <p>
-                Cerimoniários:{" "}
-                {dados.cerimoniarios.map((c) => c.nome).join(", ") || "Nenhum"}
-              </p>
+              {Object.entries(dados).map(([funcao, servidor]) => (
+                <p key={funcao}>
+                  {funcao}: {servidor.nome}
+                </p>
+              ))}
             </div>
           ))}
         </Card>
