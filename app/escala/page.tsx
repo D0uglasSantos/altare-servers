@@ -14,12 +14,14 @@ import {
   SelectValue,
 } from "../../components/ui/select";
 import { Label } from "../../components/ui/label";
+import jsPDF from "jspdf";
 
 interface Servidor {
   id: string;
   nome: string;
   funcao: string;
   idade: number;
+  nomeFormatado?: string;
 }
 
 interface EscalaMissa {
@@ -85,6 +87,34 @@ export default function GerarEscala() {
     fetchServidores();
   }, []);
 
+  const formatarNomesUnicos = (servidores: Servidor[]) => {
+    const contagem = servidores.reduce((acc, servidor) => {
+      const primeiroNome = servidor.nome.split(" ")[0];
+      acc[primeiroNome] = (acc[primeiroNome] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return servidores.map((servidor) => {
+      const [primeiroNome, ...sobrenomes] = servidor.nome.split(" ");
+      if (contagem[primeiroNome] > 1) {
+        const ultimoSobrenome = sobrenomes[sobrenomes.length - 1];
+        return {
+          ...servidor,
+          nomeFormatado: `${primeiroNome} ${ultimoSobrenome.charAt(0)}.`,
+        };
+      }
+      return { ...servidor, nomeFormatado: primeiroNome };
+    });
+  };
+
+  const formatarNome = (
+    nome: string,
+    servidoresFormatados: Servidor[] = []
+  ) => {
+    const servidorFormatado = servidoresFormatados.find((s) => s.nome === nome);
+    return servidorFormatado ? servidorFormatado.nomeFormatado : nome;
+  };
+
   const handleGerarEscala = () => {
     if (servidores.length === 0) {
       setError("Não há servidores disponíveis para gerar a escala.");
@@ -94,21 +124,29 @@ export default function GerarEscala() {
     const escala: Escala = {};
     const servidoresDisponiveis = [...servidores];
 
+    // Primeiro, alocar servidores para missas solenes e solenes maiores
     missas.forEach(({ id: missa }) => {
       const isSolene = tipoMissa !== "dominical" && missasSolenes[missa];
       const isSoleneMaior = tipoMissa === "soleneMaior" && missasSolenes[missa];
 
-      escala[missa] = {};
+      if (isSolene || isSoleneMaior) {
+        escala[missa] = {};
+        if (isSoleneMaior) {
+          alocarServidoresSoleneMaior(
+            escala[missa],
+            servidoresDisponiveis,
+            bispoPresente
+          );
+        } else {
+          alocarServidoresSolene(escala[missa], servidoresDisponiveis);
+        }
+      }
+    });
 
-      if (isSoleneMaior) {
-        alocarServidoresSoleneMaior(
-          escala[missa],
-          servidoresDisponiveis,
-          bispoPresente
-        );
-      } else if (isSolene) {
-        alocarServidoresSolene(escala[missa], servidoresDisponiveis);
-      } else {
+    // Depois, alocar servidores para missas dominicais
+    missas.forEach(({ id: missa }) => {
+      if (!escala[missa]) {
+        escala[missa] = {};
         alocarServidoresDominical(escala[missa], servidoresDisponiveis);
       }
     });
@@ -169,10 +207,16 @@ export default function GerarEscala() {
     alocarServidores(escalaMissa, servidoresDisponiveis, funcoes);
   };
 
-  const formatarNome = (nome: string) => {
-    const [primeiroNome, ...sobrenomes] = nome.split(" ");
-    const ultimoSobrenome = sobrenomes[sobrenomes.length - 1];
-    return `${primeiroNome} ${ultimoSobrenome.charAt(0)}.`;
+  const servidorDisponivel = (
+    servidoresDisponiveis: Servidor[],
+    funcao: string
+  ): Servidor | undefined => {
+    return servidoresDisponiveis.find(
+      (s) =>
+        (funcao.includes("Cerimoniário") &&
+          s.funcao.includes("Cerimoniário")) ||
+        (!funcao.includes("Cerimoniário") && s.funcao.includes("Acólito"))
+    );
   };
 
   const alocarServidores = (
@@ -181,12 +225,7 @@ export default function GerarEscala() {
     funcoes: string[]
   ) => {
     funcoes.forEach((funcao) => {
-      const servidor = servidoresDisponiveis.find(
-        (s) =>
-          (funcao.includes("Cerimoniário") &&
-            s.funcao.includes("Cerimoniário")) ||
-          (!funcao.includes("Cerimoniário") && s.funcao.includes("Acólito"))
-      );
+      const servidor = servidorDisponivel(servidoresDisponiveis, funcao);
       if (servidor) {
         escalaMissa[funcao] = {
           ...servidor,
@@ -207,6 +246,63 @@ export default function GerarEscala() {
     });
   };
 
+  const realocarServidoresNaoAlocados = (
+    escala: Escala,
+    servidoresDisponiveis: Servidor[]
+  ) => {
+    const missasNaoSolenes = missas.filter(({ id }) => !missasSolenes[id]);
+
+    Object.entries(escala).forEach(([missa, dadosMissa]) => {
+      Object.entries(dadosMissa).forEach(([funcao, servidor]) => {
+        if (servidor.nome === "Não alocado") {
+          const servidorDisponivel = servidoresDisponiveis.find(
+            (s) =>
+              (funcao.includes("Cerimoniário") &&
+                s.funcao.includes("Cerimoniário")) ||
+              (!funcao.includes("Cerimoniário") && s.funcao.includes("Acólito"))
+          );
+          if (servidorDisponivel) {
+            escala[missa][funcao] = {
+              ...servidorDisponivel,
+              nome: formatarNome(
+                servidorDisponivel.nome,
+                servidoresDisponiveis
+              ),
+            };
+            servidoresDisponiveis.splice(
+              servidoresDisponiveis.indexOf(servidorDisponivel),
+              1
+            );
+          } else if (missasNaoSolenes.length > 0) {
+            // Se não houver servidor disponível, tente mover um servidor de uma missa não solene
+            for (const missaNaoSolene of missasNaoSolenes) {
+              const servidorParaMover = Object.entries(
+                escala[missaNaoSolene.id]
+              ).find(
+                ([f, s]) =>
+                  s.nome !== "Não alocado" &&
+                  ((funcao.includes("Cerimoniário") &&
+                    s.funcao.includes("Cerimoniário")) ||
+                    (!funcao.includes("Cerimoniário") &&
+                      s.funcao.includes("Acólito")))
+              );
+              if (servidorParaMover) {
+                escala[missa][funcao] = servidorParaMover[1];
+                escala[missaNaoSolene.id][servidorParaMover[0]] = {
+                  id: "não-alocado",
+                  nome: "Não alocado",
+                  funcao: "Não alocado",
+                  idade: 0,
+                };
+                break;
+              }
+            }
+          }
+        }
+      });
+    });
+  };
+
   const resetarEscala = () => {
     setTipoMissa("");
     setMissasSolenes({
@@ -220,6 +316,40 @@ export default function GerarEscala() {
     setEscalaGerada(null);
     setBispoPresente(false);
     setError(null);
+  };
+
+  const exportarParaPDF = () => {
+    if (!escalaGerada) return;
+
+    const pdf = new jsPDF();
+    let yOffset = 20;
+
+    pdf.setFontSize(18);
+    pdf.text("Escala de Servidores", 105, yOffset, { align: "center" });
+    yOffset += 15;
+
+    pdf.setFontSize(12);
+    Object.entries(escalaGerada).forEach(([missa, dados], index) => {
+      const missaLabel = missas.find((m) => m.id === missa)?.label;
+      pdf.setFont(undefined, "bold");
+      pdf.text(`${missaLabel}`, 20, yOffset);
+      yOffset += 7;
+
+      pdf.setFont(undefined, "normal");
+      Object.entries(dados).forEach(([funcao, servidor]) => {
+        pdf.text(`${funcao}: ${servidor.nome}`, 25, yOffset);
+        yOffset += 7;
+      });
+
+      yOffset += 5;
+
+      if (yOffset > 270 || index === Object.entries(escalaGerada).length - 1) {
+        pdf.addPage();
+        yOffset = 20;
+      }
+    });
+
+    pdf.save("escala_servidores.pdf");
   };
 
   if (loading) {
@@ -308,18 +438,38 @@ export default function GerarEscala() {
       {escalaGerada && (
         <Card className="p-6 mt-6">
           <h2 className="text-xl font-semibold mb-4">Escala Gerada</h2>
-          {Object.entries(escalaGerada).map(([missa, dados]) => (
-            <div key={missa} className="mb-4">
-              <h3 className="text-lg font-semibold">
-                {missas.find((m) => m.id === missa)?.label}
-              </h3>
-              {Object.entries(dados).map(([funcao, servidor]) => (
-                <p key={funcao}>
-                  {funcao}: {servidor.nome}
-                </p>
-              ))}
-            </div>
-          ))}
+          {Object.entries(escalaGerada).map(([missa, dados]) => {
+            const missaInfo = missas.find((m) => m.id === missa);
+            const isSolene = tipoMissa !== "dominical" && missasSolenes[missa];
+            const isSoleneMaior =
+              tipoMissa === "soleneMaior" && missasSolenes[missa];
+            const label =
+              isSolene || isSoleneMaior
+                ? `${missaInfo?.label} - ${
+                    isSoleneMaior ? "Solenidade Maior" : "Solenidade"
+                  }`
+                : missaInfo?.label;
+
+            return (
+              <div key={missa} className="mb-4">
+                <h3
+                  className={`text-lg font-semibold ${
+                    isSolene || isSoleneMaior ? "text-amber-400" : ""
+                  }`}
+                >
+                  {label}
+                </h3>
+                {Object.entries(dados).map(([funcao, servidor]) => (
+                  <p key={funcao}>
+                    {funcao}: {servidor.nome}
+                  </p>
+                ))}
+              </div>
+            );
+          })}
+          <Button onClick={exportarParaPDF} className="mt-4">
+            Exportar para PDF
+          </Button>
         </Card>
       )}
     </div>

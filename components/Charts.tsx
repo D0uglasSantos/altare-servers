@@ -18,7 +18,16 @@ ChartJS.register(
   BarElement
 );
 
-export const PieChart = ({ data }) => {
+type ChartDataItem = {
+  name: string; // Nome do item (rótulo do gráfico)
+  value: number; // Valor associado ao item (número de servidores ou percentual)
+};
+
+type ChartProps = {
+  data: ChartDataItem[]; // Array de objetos com o formato definido acima
+};
+
+export const PieChart = ({ data }: ChartProps) => {
   const chartData = {
     labels: data.map((item) => item.name),
     datasets: [
@@ -32,7 +41,7 @@ export const PieChart = ({ data }) => {
   return <Pie data={chartData} />;
 };
 
-export const BarChart = ({ data }) => {
+export const BarChart = ({ data }: ChartProps) => {
   const chartData = {
     labels: data.map((item) => item.name),
     datasets: [
